@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>スタートページ</title>
+<style>
+  body {
+    margin: 0;
+    background-color: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-family: sans-serif;
+  }
+  .title {
+    font-size: 48px;
+    color: white;
+    text-align: center;
+    margin-bottom: 30px;
+    text-shadow: 2px 2px 4px rgba(255,255,255,0.5);
+  }
+  .center-image {
+    width: 90%;
+    height: auto;
+    max-height: 60vh;
+  }
+  .bottom-box {
+    position: fixed;
+    bottom: 20px;
+    width: 80%;
+    max-width: 400px;
+    background-color: rgba(255, 255, 255, 0.5);
+    padding: 20px;
+    border-radius: 8px;
+    text-align: center;
+  }
+  .bottom-box p {
+    margin: 0 0 10px 0;
+    font-size: 16px;
+  }
+  button {
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+    border: none;
+    border-radius: 4px;
+    background-color: #333;
+    color: #fff;
+  }
+  button:hover {
+    background-color: #555;
+  }
+</style>
+</head>
+<body>
+
+<div class="title">バキ童に襲われる</div>
+
+<img src="bkdt.png" alt="背景画像" class="center-image" />
+
+<div class="bottom-box">
+  <p>推奨端末：PC　イヤホン推奨</p>
+  <button id="startButton">始める</button>
+</div>
+
+<script>
+  document.getElementById('startButton').addEventListener('click', function() {
+    window.location.href = 'game.html';
+  });
+</script>
+
+</body>
+</html>
