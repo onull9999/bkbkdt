@@ -108,6 +108,17 @@ const player = {
 const physics = { gravity:-20, jumpPower:3.9, friction:5 };
 
 const enemies = [];
+const crystals = [];
+let playerScore = 0;
+
+
+const CRYSTAL_SETTINGS = {
+  maxCrystals: 15,           
+  crystalsPerChunk: 2,   
+  spawnChance: 0.8,   
+  minDistanceBetween: 1.5, 
+  collectionDistance: 1.0
+};
 
 const gridCellSize = 1;
 // A*
@@ -174,7 +185,7 @@ function showGameOver() {
   document.getElementById('gameOverOverlay').style.display = 'block';
 
   isPaused = true;
-  // ゲームオーバー時に音を停止
+
   if(enemySound && isSoundPlaying) {
     enemySound.pause();
     isSoundPlaying = false;
@@ -200,7 +211,7 @@ class Enemy {
     this.path = null;
     this.pathIndex = 0;
     this.repathCooldown = 0;
-        this.wallCollisionCounter = 0;
+    this.wallCollisionCounter = 0;
     this.isPassingThroughWall = false;
     const planeGeo = new THREE.PlaneGeometry(this.spriteSize, this.spriteSize);
     let material;
@@ -224,7 +235,6 @@ class Enemy {
     return Math.sqrt(dx*dx + dz*dz);
   }
 
-
   toGrid(p){
     return { x: Math.round(p.x), y: Math.round(p.z) };
   }
@@ -239,7 +249,7 @@ class Enemy {
         this.repathToPlayer();
         this.repathCooldown = 8;
       } else {
-        this.repathCooldown -= 1;
+        this.repathCooldown -= 1 * delta * 60;
       }
       this.followPath(delta);
     } else {
@@ -248,66 +258,66 @@ class Enemy {
       this.path = null;
     }
 
+    const hitSize = this.spriteSize * 0.4;
 
+    const pxMinX = player.position.x - (hitSize/2);
+    const pxMaxX = player.position.x + (hitSize/2);
+    const pxMinZ = player.position.z - (hitSize/2);
+    const pxMaxZ = player.position.z + (hitSize/2);
 
-const hitSize = this.spriteSize * 0.4;
+    const enMinX = this.pos.x - (hitSize/2);
+    const enMaxX = this.pos.x + (hitSize/2);
+    const enMinZ = this.pos.z - (hitSize/2);
+    const enMaxZ = this.pos.z + (hitSize/2);
 
-const pxMinX = player.position.x - (hitSize/2);
-const pxMaxX = player.position.x + (hitSize/2);
-const pxMinZ = player.position.z - (hitSize/2);
-const pxMaxZ = player.position.z + (hitSize/2);
+    const intersect = !(pxMaxX < enMinX || pxMinX > enMaxX || pxMaxZ < enMinZ || pxMinZ > enMaxZ);
+    if(intersect){
+      const dir = new THREE.Vector3().subVectors(player.position, this.pos).setY(0).normalize();
+      if(dir.length() === 0) dir.set(0,0,1);
+      const kbStrength = 4.0;
+      player.velocity.addScaledVector(dir, kbStrength * delta * 60);
+      
+      player.position.addScaledVector(dir, 0.1 * delta * 60);
+      showGameOver();
+      
+      const attempted = new THREE.Vector3().copy(this.pos).addScaledVector(dir, this.speed * delta * 60);
+      const collision = enemyCheckWallCollision(attempted, this.bodyRadius);
 
-const enMinX = this.pos.x - (hitSize/2);
-const enMaxX = this.pos.x + (hitSize/2);
-const enMinZ = this.pos.z - (hitSize/2);
-const enMaxZ = this.pos.z + (hitSize/2);
-
-const intersect = !(pxMaxX < enMinX || pxMinX > enMaxX || pxMaxZ < enMinZ || pxMinZ > enMaxZ);
-if(intersect){
-  
-    const dir = new THREE.Vector3().subVectors(player.position, this.pos).setY(0).normalize();
-    if(dir.length() === 0) dir.set(0,0,1);
-    const kbStrength = 4.0;
-    player.velocity.addScaledVector(dir, kbStrength);
-    
-    player.position.addScaledVector(dir, 0.1);
-    showGameOver();
-const attempted = new THREE.Vector3().copy(this.pos).addScaledVector(dir, this.speed);
-    const collision = enemyCheckWallCollision(attempted, this.bodyRadius);
-
-    if(collision && !this.isPassingThroughWall){      
-      this.wallCollisionCounter += delta;
-      if(this.wallCollisionCounter >= 3){
-        this.isPassingThroughWall = true;
-        this.wallCollisionCounter = 0; // re
-      }
-    } else {
-      if(this.isPassingThroughWall){
-        this.pos.copy(attempted);
-        this.isPassingThroughWall = false;
+      if(collision && !this.isPassingThroughWall){      
+        this.wallCollisionCounter += delta;
+        if(this.wallCollisionCounter >= 3){
+          this.isPassingThroughWall = true;
+          this.wallCollisionCounter = 0; // re
+        }
       } else {
-        if(!enemyCheckWallCollision(attempted, this.bodyRadius)){
+        if(this.isPassingThroughWall){
           this.pos.copy(attempted);
+          this.isPassingThroughWall = false;
+        } else {
+          if(!enemyCheckWallCollision(attempted, this.bodyRadius)){
+            this.pos.copy(attempted);
+          }
+        }
+        if(!collision){
+          this.wallCollisionCounter = 0;
         }
       }
-      if(!collision){
-        this.wallCollisionCounter = 0;
-      }
+    }
+    
+    const distanceToPlayer = this.distanceToPlayer();
+    const teleportThreshold = 50; // teleport range
+    if(distanceToPlayer > teleportThreshold){
+      const offsetDistance = 8 + Math.random() * 7; // 8〜15
+      const angle = Math.random() * Math.PI * 2;
+      const offsetX = Math.cos(angle) * offsetDistance;
+      const offsetZ = Math.sin(angle) * offsetDistance;
+      this.pos.set(player.position.x + offsetX, 0.8, player.position.z + offsetZ);
+      this.path = null;
+      this.wanderTarget = null;
+      this.pathIndex = 0;
     }
   }
-      const distanceToPlayer = this.distanceToPlayer();
-    const teleportThreshold = 50; // teleport range
-if(distanceToPlayer > teleportThreshold){
-  const offsetDistance = 8 + Math.random() * 7; // 8〜15
-  const angle = Math.random() * Math.PI * 2;
-  const offsetX = Math.cos(angle) * offsetDistance;
-  const offsetZ = Math.sin(angle) * offsetDistance;
-  this.pos.set(player.position.x + offsetX, 0.8, player.position.z + offsetZ);
-  this.path = null;
-  this.wanderTarget = null;
-  this.pathIndex = 0;
-}
-}
+
   repathToPlayer(){
     const grid = buildOccupancyGridAroundPlayer(12);
     const bounds = grid.bounds;
@@ -340,7 +350,7 @@ if(distanceToPlayer > teleportThreshold){
       return;
     }
     dir.normalize();
-    const move = this.speed;
+    const move = this.speed * delta * 60;
     const attempted = new THREE.Vector3().copy(this.pos).addScaledVector(dir, move);
     if(!enemyCheckWallCollision(attempted, this.bodyRadius)){
       this.pos.copy(attempted);
@@ -351,7 +361,7 @@ if(distanceToPlayer > teleportThreshold){
   }
 
   wander(delta){
-    if(!this.wanderTarget || Math.random() < 0.01){
+    if(!this.wanderTarget || Math.random() < 0.01 * delta * 60){
       const r = 6 + Math.random()*8;
       const ang = Math.random()*Math.PI*2;
       this.wanderTarget = new THREE.Vector3(this.pos.x + Math.cos(ang)*r, 0, this.pos.z + Math.sin(ang)*r);
@@ -362,7 +372,8 @@ if(distanceToPlayer > teleportThreshold){
       return;
     }
     dir.normalize();
-    const attempted = new THREE.Vector3().copy(this.pos).addScaledVector(dir, this.speed*0.6);
+    const move = this.speed * 0.6 * delta * 60;
+    const attempted = new THREE.Vector3().copy(this.pos).addScaledVector(dir, move);
     if(!enemyCheckWallCollision(attempted, this.bodyRadius)){
       this.pos.copy(attempted);
     } else {
@@ -374,6 +385,57 @@ if(distanceToPlayer > teleportThreshold){
     scene.remove(this.mesh);
   }
 }
+class Crystal {
+  constructor(pos) {
+    this.pos = new THREE.Vector3(pos.x, 1.0, pos.z);
+    this.collected = false;
+
+    const geometry = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+    const material = new THREE.MeshBasicMaterial({ color: 0x0088ff, transparent: true, opacity: 0.8 });
+    
+    this.mesh = new THREE.Mesh(geometry, material);
+    this.mesh.position.copy(this.pos);
+
+    this.rotationSpeed = 0.02;
+    
+    scene.add(this.mesh);
+  }
+  
+  update() {
+    if (this.collected) return;
+
+    this.mesh.rotation.x += this.rotationSpeed;
+    
+    this.mesh.position.y = this.pos.y + Math.sin(Date.now() * 0.002) * 0.1;
+    
+    const playerPos = new THREE.Vector3(player.position.x, 1.0, player.position.z);
+    const distance = this.mesh.position.distanceTo(playerPos);
+    
+    if (distance < CRYSTAL_SETTINGS.collectionDistance) {
+      this.collect();
+    }
+  }
+  
+  collect() {
+    if (this.collected) return;
+    
+    this.collected = true;
+    scene.remove(this.mesh);
+    playerScore += 1;
+    console.log("クリスタル収集！ポイント: " + playerScore);
+    
+    if (Math.random() < 0.3) {
+      trySpawnCrystalNearPlayer();
+    }
+  }
+  
+  dispose() {
+    if (this.mesh && this.mesh.parent) {
+      scene.remove(this.mesh);
+    }
+  }
+}
+
 function buildOccupancyGridAroundPlayer(radius){
   const cx = Math.round(player.position.x);
   const cz = Math.round(player.position.z);
@@ -520,7 +582,6 @@ function spawnEnemy(){
     spawnPos = new THREE.Vector3(x, 0, z);
     attempts++;
     if(!checkWallCollision(spawnPos)){
-      // プレイヤーからの距離を計算
       const dist = spawnPos.distanceTo(player.position);
       if(dist >= minDistance) break;
     }
@@ -528,6 +589,66 @@ function spawnEnemy(){
   const enemy = new Enemy(spawnPos);
   enemies.push(enemy);
 }
+
+function spawnCrystal(chunkX, chunkZ) {
+  if (crystals.length >= CRYSTAL_SETTINGS.maxCrystals) {
+    return false;
+  }
+
+  const baseX = chunkX * chunkSize;
+  const baseZ = chunkZ * chunkSize;
+  
+  let spawnedCount = 0;
+  
+  for (let i = 0; i < CRYSTAL_SETTINGS.crystalsPerChunk; i++) {
+    if (crystals.length >= CRYSTAL_SETTINGS.maxCrystals) break;
+    if (Math.random() > CRYSTAL_SETTINGS.spawnChance) continue;
+
+    let attempts = 0;
+    while (attempts < 30) {
+      const x = baseX + Math.floor(Math.random() * (chunkSize - 4)) - chunkSize/2 + 2;
+      const z = baseZ + Math.floor(Math.random() * (chunkSize - 4)) - chunkSize/2 + 2;
+      
+      const testPos = new THREE.Vector3(x, 1.0, z);
+      if (!checkWallCollision(testPos)) {
+        let tooClose = false;
+        for (const crystal of crystals) {
+          if (crystal.mesh.position.distanceTo(testPos) < CRYSTAL_SETTINGS.minDistanceBetween) {
+            tooClose = true;
+            break;
+          }
+        }
+        
+        if (!tooClose) {
+          const crystal = new Crystal(testPos);
+          crystals.push(crystal);
+          spawnedCount++;
+          break;
+        }
+      }
+      attempts++;
+    }
+  }
+  
+  return spawnedCount > 0;
+}
+
+function trySpawnCrystalNearPlayer() {
+  if (crystals.length >= CRYSTAL_SETTINGS.maxCrystals) return false;
+  
+  const playerChunkX = Math.floor(player.position.x / chunkSize);
+  const playerChunkZ = Math.floor(player.position.z / chunkSize);
+  
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dz = -1; dz <= 1; dz++) {
+      if (spawnCrystal(playerChunkX + dx, playerChunkZ + dz)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 function createFloorAndCeiling(){
   const floorGeometry = new THREE.PlaneGeometry(1000,1000);
   const floorMaterial = new THREE.MeshStandardMaterial({ color:0x333333, roughness:0.8 });
@@ -550,6 +671,10 @@ function generateInitialMaze(){
     for(let dz=-1; dz<=1; dz++){
       generateMazeChunk(dx,dz);
     }
+  }
+  
+  for(let i = 0; i < 5; i++) {
+    trySpawnCrystalNearPlayer();
   }
 }
 
@@ -580,6 +705,8 @@ function generateMazeChunk(chunkX, chunkZ){
   }
   ensurePathways(chunkX,chunkZ,walls);
   mazeChunks.set(chunkKey, walls);
+  
+  spawnCrystal(chunkX, chunkZ);
 }
 
 function createWall(x,z,geometry,material){
@@ -673,9 +800,12 @@ function togglePause(){
 
 function animate(){
   requestAnimationFrame(animate);
-  if(!isPaused){
-    const deltaTime = 0.016;
+  
+  const now = performance.now();
+  const deltaTime = Math.min((now - (animate.lastTime || now)) / 1000, 0.1);
+  animate.lastTime = now;
 
+  if(!isPaused){
     let moveX = 0, moveZ = 0;
     if(controls.forward) moveZ -= 1;
     if(controls.backward) moveZ += 1;
@@ -694,10 +824,11 @@ function animate(){
     right.crossVectors(camera.up, direction).normalize();
 
     const moveVector = new THREE.Vector3();
-    moveVector.addScaledVector(direction, moveZ * playerSpeed);
-    moveVector.addScaledVector(right, moveX * playerSpeed);
-    playerSpeed = isDashing ? 0.15 : 0.05;
-
+ 
+    const currentPlayerSpeed = isDashing ? 0.15 : 0.05;
+    moveVector.addScaledVector(direction, moveZ * currentPlayerSpeed * deltaTime * 60);
+    moveVector.addScaledVector(right, moveX * currentPlayerSpeed * deltaTime * 60);
+    
     player.velocity.y += physics.gravity * deltaTime;
     moveVector.y = player.velocity.y * deltaTime;
 
@@ -737,40 +868,35 @@ function animate(){
     }
 
     player.position.copy(finalPosition);
-    camera.position.copy(player.position);
 
+    if(moveX !== 0 || moveZ !== 0){
+      cameraShakeTime += deltaTime;
+      const shakeAmplitude = 0.05; 
+      const shakeFrequency = 10; 
+      const shakeX = Math.sin(cameraShakeTime * shakeFrequency) * shakeAmplitude;
+      const shakeY = Math.cos(cameraShakeTime * shakeFrequency * 1.5) * shakeAmplitude;
+      const shakeZ = Math.sin(cameraShakeTime * shakeFrequency * 0.8) * shakeAmplitude;
 
+      camera.position.x = player.position.x + shakeX;
+      camera.position.y = player.position.y + shakeY + 1.6; 
+      camera.position.z = player.position.z + shakeZ;
+    } else {
+      cameraShakeTime = 0;
+      camera.position.x = player.position.x;
+      camera.position.y = player.position.y + 1.6;
+      camera.position.z = player.position.z;
+    }
+    
     camera.rotation.order = 'YXZ';
+    camera.rotation.y = player.yaw;
+    camera.rotation.x = player.pitch;
 
-  if(moveX !== 0 || moveZ !== 0){
-    cameraShakeTime += deltaTime;
-    const shakeAmplitude = 0.05; 
-    const shakeFrequency = 10; 
-    const shakeX = Math.sin(cameraShakeTime * shakeFrequency) * shakeAmplitude;
-    const shakeY = Math.cos(cameraShakeTime * shakeFrequency * 1.5) * shakeAmplitude;
-    const shakeZ = Math.sin(cameraShakeTime * shakeFrequency * 0.8) * shakeAmplitude;
-
-    camera.position.x = player.position.x + shakeX;
-    camera.position.y = player.position.y + shakeY + 1.6; 
-    camera.position.z = player.position.z + shakeZ;
-  } else {
-    cameraShakeTime = 0;
-    camera.position.x = player.position.x;
-    camera.position.y = player.position.y + 1.6;
-    camera.position.z = player.position.z;
-  }
-  camera.rotation.order = 'YXZ';
-  camera.rotation.y = player.yaw;
-  camera.rotation.x = player.pitch;
-
-
-if (viewControlMode === 'arrow') {
-  if (controls.turnLeft) player.yaw += rotationSpeed;
-  if (controls.turnRight) player.yaw -= rotationSpeed;
-}
-camera.rotation.y = player.yaw;
-camera.rotation.x = player.pitch;
-
+    if (viewControlMode === 'arrow') {
+      if (controls.turnLeft) player.yaw += rotationSpeed * deltaTime * 60;
+      if (controls.turnRight) player.yaw -= rotationSpeed * deltaTime * 60;
+    }
+    camera.rotation.y = player.yaw;
+    camera.rotation.x = player.pitch;
 
     manageMazeChunks();
     updateDebugInfo(moveX, moveZ);
@@ -778,13 +904,27 @@ camera.rotation.x = player.pitch;
     if(playerLight){
       playerLight.position.copy(player.position);
     }
+    
     for(const e of enemies){
       e.update(deltaTime);
     }
+    
+    for(let i = crystals.length - 1; i >= 0; i--) {
+      if (!crystals[i].collected) {
+        crystals[i].update();
+      }
+      
+      if (crystals[i].collected) {
+        crystals[i].dispose();
+        crystals.splice(i, 1);
+      }
+    }
+    
     updateSoundVolume();
 
-    player.velocity.x *= physics.friction;
-    player.velocity.z *= physics.friction;
+    const frictionFactor = Math.pow(physics.friction, deltaTime);
+    player.velocity.x *= frictionFactor;
+    player.velocity.z *= frictionFactor;
 
   }
   renderer.render(scene, camera);
@@ -915,7 +1055,9 @@ function updateDebugInfo(moveX, moveZ){
     チャンク数: ${mazeChunks.size}<br>
     onGround: ${player.onGround ? 'YES' : 'NO'}<br>
     速度Y: ${player.velocity.y.toFixed(1)}<br>
-    敵数: ${enemies.length}
+    敵数: ${enemies.length}<br>
+    ポイント: ${playerScore}<br>
+    クリスタル数: ${crystals.length}/${CRYSTAL_SETTINGS.maxCrystals}
   `;
 }
 </script>
